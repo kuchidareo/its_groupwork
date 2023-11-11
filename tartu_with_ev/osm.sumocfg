@@ -11,6 +11,11 @@
         <additional-files value="osm.poly.xml.gz,charging.stations.xml.gz"/>
     </input>
 
+    <output>
+        <battery-output value="battery.xml"/>
+        <chargingstations-output value="chargingstations.xml"/>
+    </output>
+
     <processing>
         <ignore-route-errors value="true"/>
     </processing>

@@ -14,6 +14,10 @@ ev_share = 0.15
 num_ev = int(len(trip_elements) * ev_share)
 for i in range(num_ev):
     trip_elements[i].set('type', soulEV65)
+    battery_capacity = 64000
+    battery = random.randint(int(battery_capacity*5/100), battery_capacity)
+    param_element = ET.Element('param', {'key': 'actualBatteryCapacity', 'value': str(battery)})
+    trip_elements[i].append(param_element)
 
 evConfig = '''<vType id="soulEV65" minGap="2.50" maxSpeed="29.06" color="white" accel="1.0" decel="1.0" sigma="0.0" emissionClass="Energy/unknown">
     <param key="has.battery.device" value="true"/>
