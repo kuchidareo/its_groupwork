@@ -11,7 +11,7 @@ constant_power_intake = 100000 # default: 100
 trip_elements = root.findall('.//trip')
 random.shuffle(trip_elements)
 
-ev_share = 0.15
+ev_share = 0.45
 num_ev = int(len(trip_elements) * ev_share)
 for i in range(num_ev):
     trip_elements[i].set('type', soulEV65)
@@ -40,4 +40,4 @@ evConfigXml = ET.fromstring(evConfig)
 
 root.insert(0, evConfigXml)
 
-tree.write('car.ev.trips.xml')
+tree.write('car.ev.trips.45.xml')

@@ -11,7 +11,6 @@ import matplotlib.pyplot as plt
 
 sumoBinary = checkBinary("sumo")
 # sumoBinary = checkBinary('sumo-gui') # to watch the simulation on sumo-gui
-sumoCmd = [sumoBinary, "-c", "osm.sumocfg", "--no-warnings"]
 
 CHARGING_STATUS_ID = 32
 NUM_LIMIT_CHARGING_STATION = 2
@@ -81,139 +80,134 @@ def find_nearest_empty_charging_station(ev_id, charging_stations):
 
     return dest_station_id, dest_station_edge_id
 
-# EV_trip_xml_list = ["car.ev.trips.15.xml", "car.ev.trips.5.xml", "car.ev.trips.10.xml"]
-# for EV_trip_xml in EV_trip_xml_list:
-EV_trip_xml = "car.ev.trips.xml"
-charging_station_xml_gz = "charging.stations.xml.gz"
 
-soulEV65_ids = getIds_EV(EV_trip_xml)
-charging_stations = get_chargingstations(charging_station_xml_gz)
-CHARGING_DURATION_STEPS = 330
-SIMULATION = 1
+simulation_result_path = f'log_waiting_vs_cars_simulation.csv'
+fields = ["SimulationId", "EVPercentage", "AvergaWaitime"]
+rows = []
 
-simulation_step = 10000 # the last car departs at step 3500.
+ev_percentages = ["05", "10", "15", "20", "25", "30", "35", "40", "45", "50"]
 
-waiting_queues = {}
-ev_charging_station = {}
+EV_trip_xml_list = [f"car.ev.trips.{i}.xml" for i in ev_percentages]
+sumo_file_list = [f"osm.{i}.sumocfg" for i in ev_percentages]
+for EV_trip_xml, sumo_file, simulation_id, ev_percentage in zip(EV_trip_xml_list, sumo_file_list, range(10), ev_percentages):
+    # EV_trip_xml = "car.ev.trips.05.xml"
+    charging_station_xml_gz = "charging.stations.xml.gz"
 
-LOGGING = {}
+    soulEV65_ids = getIds_EV(EV_trip_xml)
+    charging_stations = get_chargingstations(charging_station_xml_gz)
+    CHARGING_DURATION_STEPS = 330
 
-initialize_waiting_queues(charging_stations)
+    simulation_step = 100 # the last car departs at step 3500.
 
-traci.start(sumoCmd)
+    waiting_queues = {}
+    ev_charging_station = {}
 
-step = 0
-# while step < simulation_step:
-while step < simulation_step:
-    if step % 100 == 0:
-        print("-----------")
-        print(f"STEP: {step}")
-        # for station_id in charging_stations.keys():
-        #     station = charging_stations[station_id]
-        #     print(station_id, station["num_going"])
+    LOGGING = {}
+
+    initialize_waiting_queues(charging_stations)
+
+    sumoCmd = [sumoBinary, "-c", sumo_file, "--no-warnings"]
+    traci.start(sumoCmd)
+
+    step = 0
+    # while step < simulation_step:
+    while step < simulation_step:
+        if step % 100 == 0:
+            print("-----------")
+            print(f"STEP: {step}")
+            # for station_id in charging_stations.keys():
+            #     station = charging_stations[station_id]
+            #     print(station_id, station["num_going"])
+            for key in waiting_queues.keys(): 
+                # if key == "enefit_volt_78141":
+                queue = waiting_queues[key]['queue']
+                print(f"station: {key}")
+                for item in queue:
+                    print(item.id, item.waiting_step_counter, item.charging_step_counter)
+            
+            
+        traci.simulationStep()
+        running_vehicles = traci.vehicle.getIDList()
+
         for key in waiting_queues.keys(): 
-            # if key == "enefit_volt_78141":
             queue = waiting_queues[key]['queue']
-            print(f"station: {key}")
-            for item in queue:
-                print(item.id, item.waiting_step_counter, item.charging_step_counter)
-        
-        
-    traci.simulationStep()
-    running_vehicles = traci.vehicle.getIDList()
+            for (item, idx) in zip(queue, range(len(queue))):
+                if(idx == 0 or idx == 1):
+                    queue[idx].charging_step_counter = queue[idx].charging_step_counter + 1
+                else:
+                    queue[idx].waiting_step_counter = queue[idx].waiting_step_counter + 1
+                    waiting_queues[charging_station_id]['waiting_steps'] += 1
 
-    for key in waiting_queues.keys(): 
-        queue = waiting_queues[key]['queue']
-        for (item, idx) in zip(queue, range(len(queue))):
-            if(idx == 0 or idx == 1):
-                queue[idx].charging_step_counter = queue[idx].charging_step_counter + 1
-            else:
-                queue[idx].waiting_step_counter = queue[idx].waiting_step_counter + 1
-                waiting_queues[charging_station_id]['waiting_steps'] += 1
-
-    for ev_id in soulEV65_ids:
-        if ev_id not in running_vehicles:
-            continue
-        
-        elif (ev_id in ev_charging_station.keys()): # Going to the charging station. -> [Going]
-            charging_station_id = ev_charging_station[ev_id]["charging_station_id"]
-
-            vehicle_edge_id = traci.vehicle.getRoadID(ev_id)
-            station_edge_id = charging_stations[charging_station_id]["edge"]
-            distance = traci.simulation.findRoute(vehicle_edge_id, station_edge_id).length
-
-            if distance < 100: # Getting to the charging station. -> [Waiting]
-                #if charging_station_id not in waiting_queues.keys():
-                #   waiting_queues[charging_station_id] = [] #initializing queue for the charging station
-
-                if ev_charging_station[ev_id]["state"] == "Going":
-                    #waiting_queues[charging_station_id].append(waiting_queue_item(charging_station_id, ev_id, 0, 0))
-                    waiting_queues[charging_station_id]['queue'].append(waiting_queue_item(dest_station_id, ev_id, 0, 0))
-                    waiting_queues[charging_station_id]['total_cars'] +=1
-                    ev_charging_station[ev_id]["state"] = "Waiting"
-
-                queue = waiting_queues[charging_station_id]['queue']
-                if len(queue) > 0 and queue[0].charging_step_counter >= CHARGING_DURATION_STEPS:
-                    LOGGING[ev_id] = queue[0].waiting_step_counter
-                    charging_stations[charging_station_id]["num_going"] -= 1
-                    v = queue.pop(0)
-                    ev_charging_station[ev_id]["state"] = "Charged"
-                    # ev_charging_station.pop(ev_id)
-                    print('charging_station: ', v.charging_station_id, 'popped', v.id, 'waited: ', v.waiting_step_counter, 'charge_time: ', v.charging_step_counter, len(queue))
-
-                if len(queue) > 1 and queue[1].charging_step_counter >= CHARGING_DURATION_STEPS:
-                    LOGGING[ev_id] = queue[1].waiting_step_counter
-                    charging_stations[charging_station_id]["num_going"] -= 1
-                    v = queue.pop(1)
-                    ev_charging_station[ev_id]["state"] = "Charged"
-                    # ev_charging_station.pop(ev_id)
-                    print('charging_station: ', v.charging_station_id, 'popped', v.id, 'waited: ', v.waiting_step_counter, 'charge_time: ', v.charging_step_counter, len(queue))
-        else:
-            try:
-                battery_remain = float(traci.vehicle.getParameter(ev_id, "device.battery.actualBatteryCapacity"))
-                if battery_remain < MAXIMUM_BATTERY_CAPACITY / 10:
-                    dest_station_id, dest_station_edge_id = find_nearest_empty_charging_station(ev_id, charging_stations)
-
-                    traci.vehicle.changeTarget(ev_id, dest_station_edge_id)
-                    traci.vehicle.setChargingStationStop(ev_id, dest_station_id, duration=CHARGING_DURATION_STEPS)
-
-                    charging_stations[dest_station_id]["num_going"] += 1
-                    if ev_id not in ev_charging_station:
-                        ev_charging_station[ev_id] = {"charging_station_id": dest_station_id, "state": "Going"}
-        
-            except traci.exceptions.TraCIException as e: # Not Found the ev in the simulation map
+        for ev_id in soulEV65_ids:
+            if ev_id not in running_vehicles:
                 continue
-    step += 1
+            
+            elif (ev_id in ev_charging_station.keys()): # Going to the charging station. -> [Going]
+                charging_station_id = ev_charging_station[ev_id]["charging_station_id"]
 
-traci.close()
+                vehicle_edge_id = traci.vehicle.getRoadID(ev_id)
+                station_edge_id = charging_stations[charging_station_id]["edge"]
+                distance = traci.simulation.findRoute(vehicle_edge_id, station_edge_id).length
 
-csv_file_path = f'log_{EV_trip_xml}.csv'
-simulation_result_path = f'log_waiting_vs_cars_simulation_{SIMULATION}.csv'
+                if distance < 100: # Getting to the charging station. -> [Waiting]
+                    #if charging_station_id not in waiting_queues.keys():
+                    #   waiting_queues[charging_station_id] = [] #initializing queue for the charging station
+                    if ev_charging_station[ev_id]["state"] == "Going":
+                        #waiting_queues[charging_station_id].append(waiting_queue_item(charging_station_id, ev_id, 0, 0))
+                        waiting_queues[charging_station_id]['queue'].append(waiting_queue_item(dest_station_id, ev_id, 0, 0))
+                        waiting_queues[charging_station_id]['total_cars'] +=1
+                        ev_charging_station[ev_id]["state"] = "Waiting"
 
-# Writing the dictionary to a CSV file
-with open(csv_file_path, 'w', newline='') as csv_file:
-    writer = csv.writer(csv_file)
-    writer.writerow(['vehicle_id', 'waiting_time'])
-    
-    # Write the data
-    for key, value in LOGGING.items():
-        writer.writerow([key, value])
+                    queue = waiting_queues[charging_station_id]['queue']
+                    if len(queue) > 0 and queue[0].charging_step_counter >= CHARGING_DURATION_STEPS:
+                        LOGGING[ev_id] = queue[0].waiting_step_counter
+                        charging_stations[charging_station_id]["num_going"] -= 1
+                        v = queue.pop(0)
+                        ev_charging_station[ev_id]["state"] = "Charged"
+                        # ev_charging_station.pop(ev_id)
+                        print('charging_station: ', v.charging_station_id, 'popped', v.id, 'waited: ', v.waiting_step_counter, 'charge_time: ', v.charging_step_counter, len(queue))
 
+                    if len(queue) > 1 and queue[1].charging_step_counter >= CHARGING_DURATION_STEPS:
+                        LOGGING[ev_id] = queue[1].waiting_step_counter
+                        charging_stations[charging_station_id]["num_going"] -= 1
+                        v = queue.pop(1)
+                        ev_charging_station[ev_id]["state"] = "Charged"
+                        # ev_charging_station.pop(ev_id)
+                        print('charging_station: ', v.charging_station_id, 'popped', v.id, 'waited: ', v.waiting_step_counter, 'charge_time: ', v.charging_step_counter, len(queue))
+            else:
+                try:
+                    battery_remain = float(traci.vehicle.getParameter(ev_id, "device.battery.actualBatteryCapacity"))
+                    if battery_remain < MAXIMUM_BATTERY_CAPACITY / 10:
+                        dest_station_id, dest_station_edge_id = find_nearest_empty_charging_station(ev_id, charging_stations)
 
-print(f"CSV file written to {csv_file_path}")
+                        traci.vehicle.changeTarget(ev_id, dest_station_edge_id)
+                        traci.vehicle.setChargingStationStop(ev_id, dest_station_id, duration=CHARGING_DURATION_STEPS)
 
-# Writing the dictionary to a CSV file
-with open(simulation_result_path, 'w', newline='') as csv_file:
-    writer = csv.writer(csv_file)
-    writer.writerow(['simulation_id', 'waiting_time'])
+                        charging_stations[dest_station_id]["num_going"] += 1
+                        if ev_id not in ev_charging_station:
+                            ev_charging_station[ev_id] = {"charging_station_id": dest_station_id, "state": "Going"}
+            
+                except traci.exceptions.TraCIException as e: # Not Found the ev in the simulation map
+                    continue
+        step += 1
+
+    traci.close()
+
+    csv_file_path = f'log_{EV_trip_xml}.csv'
+
+    # Writing the dictionary to a CSV file
     total_waiting_time = 0
-    # Write the data
     for key, value in waiting_queues.items():
         total_waiting_time += value['waiting_steps']
     
     avg_waiting_time = total_waiting_time / len(waiting_queues.keys())
+    rows.append([simulation_id, ev_percentage, avg_waiting_time])
 
-    writer.writerow([SIMULATION, avg_waiting_time])
+with open(simulation_result_path, 'w', newline='') as csv_file:
+    writer = csv.writer(csv_file)
+    writer.writerow(fields)
+
+    writer.writerow(rows)
 
 
 print(f"CSV file written to {csv_file_path}")
