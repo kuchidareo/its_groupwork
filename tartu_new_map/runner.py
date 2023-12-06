@@ -89,6 +89,7 @@ charging_station_xml_gz = "charging.stations.xml.gz"
 soulEV65_ids = getIds_EV(EV_trip_xml)
 charging_stations = get_chargingstations(charging_station_xml_gz)
 CHARGING_DURATION_STEPS = 330
+SIMULATION = 1
 
 simulation_step = 10000 # the last car departs at step 3500.
 
@@ -187,6 +188,7 @@ while step < simulation_step:
 traci.close()
 
 csv_file_path = f'log_{EV_trip_xml}.csv'
+simulation_result_path = f'log_waiting_vs_cars_simulation_{SIMULATION}.csv'
 
 # Writing the dictionary to a CSV file
 with open(csv_file_path, 'w', newline='') as csv_file:
@@ -196,6 +198,22 @@ with open(csv_file_path, 'w', newline='') as csv_file:
     # Write the data
     for key, value in LOGGING.items():
         writer.writerow([key, value])
+
+
+print(f"CSV file written to {csv_file_path}")
+
+# Writing the dictionary to a CSV file
+with open(simulation_result_path, 'w', newline='') as csv_file:
+    writer = csv.writer(csv_file)
+    writer.writerow(['simulation_id', 'waiting_time'])
+    total_waiting_time = 0
+    # Write the data
+    for key, value in waiting_queues.items():
+        total_waiting_time += value['waiting_steps']
+    
+    avg_waiting_time = total_waiting_time / len(waiting_queues.keys())
+
+    writer.writerow([SIMULATION, avg_waiting_time])
 
 
 print(f"CSV file written to {csv_file_path}")
