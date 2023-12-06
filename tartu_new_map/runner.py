@@ -45,6 +45,12 @@ def get_chargingstations(xml_gz):
 
     return charging_stations
 
+def initialize_waiting_queues(charging_stations):
+    for charging_station in charging_stations:
+        waiting_queues[charging_station] = {'queue': [], 'waiting_steps': 0, 'total_cars': 0}
+
+    return charging_stations
+
 def find_nearest_empty_charging_station(ev_id, charging_stations):
     vehicle_edge_id = traci.vehicle.getRoadID(ev_id)
     min_distance = float("inf")
@@ -93,6 +99,8 @@ LOGGING = {}
 log_steps = []
 log_average_waiting_time = []
 
+initialize_waiting_queues(charging_stations)
+
 traci.start(sumoCmd)
 
 step = 0
@@ -106,7 +114,7 @@ while step < simulation_step:
         #     print(station_id, station["num_going"])
         for key in waiting_queues.keys(): 
             # if key == "enefit_volt_78141":
-            queue = waiting_queues[key]
+            queue = waiting_queues[key]['queue']
             print(f"station: {key}")
             sum_waiting_step = 0
             for item in queue:
@@ -120,13 +128,14 @@ while step < simulation_step:
     running_vehicles = traci.vehicle.getIDList()
 
     for key in waiting_queues.keys(): 
-        queue = waiting_queues[key]
+        queue = waiting_queues[key]['queue']
         for (item, idx) in zip(queue, range(len(queue))):
             if(idx == 0 or idx == 1):
                 queue[idx].charging_step_counter = queue[idx].charging_step_counter + 1
             else:
                 queue[idx].waiting_step_counter = queue[idx].waiting_step_counter + 1
-    
+                waiting_queues[charging_station_id]['waiting_steps'] += 1
+
     for ev_id in soulEV65_ids:
         if ev_id not in running_vehicles:
             continue
@@ -139,14 +148,16 @@ while step < simulation_step:
             distance = traci.simulation.findRoute(vehicle_edge_id, station_edge_id).length
 
             if distance < 100: # Getting to the charging station. -> [Waiting]
-                if charging_station_id not in waiting_queues.keys():
-                    waiting_queues[charging_station_id] = [] #initializing queue for the charging station
+                #if charging_station_id not in waiting_queues.keys():
+                 #   waiting_queues[charging_station_id] = [] #initializing queue for the charging station
 
                 if ev_charging_station[ev_id]["state"] == "Going":
-                    waiting_queues[charging_station_id].append(waiting_queue_item(charging_station_id, ev_id, 0, 0))
+                    #waiting_queues[charging_station_id].append(waiting_queue_item(charging_station_id, ev_id, 0, 0))
+                    waiting_queues[charging_station_id]['queue'].append(waiting_queue_item(dest_station_id, ev_id, 0, 0))
+                    waiting_queues[charging_station_id]['total_cars'] +=1
                     ev_charging_station[ev_id]["state"] = "Waiting"
 
-                queue = waiting_queues[charging_station_id]
+                queue = waiting_queues[charging_station_id]['queue']
                 if len(queue) > 0 and queue[0].charging_step_counter >= CHARGING_DURATION_STEPS:
                     LOGGING["vehicle_id"] = ev_id
                     LOGGING[ev_id] = queue[0].waiting_step_counter
