@@ -81,8 +81,8 @@ def find_nearest_empty_charging_station(ev_id, charging_stations):
 
     return dest_station_id, dest_station_edge_id
 
-
-
+# EV_trip_xml_list = ["car.ev.trips.15.xml", "car.ev.trips.5.xml", "car.ev.trips.10.xml"]
+# for EV_trip_xml in EV_trip_xml_list:
 EV_trip_xml = "car.ev.trips.xml"
 charging_station_xml_gz = "charging.stations.xml.gz"
 
@@ -90,14 +90,12 @@ soulEV65_ids = getIds_EV(EV_trip_xml)
 charging_stations = get_chargingstations(charging_station_xml_gz)
 CHARGING_DURATION_STEPS = 330
 
-simulation_step = 3000 # the last car departs at step 3500.
+simulation_step = 10000 # the last car departs at step 3500.
 
 waiting_queues = {}
 ev_charging_station = {}
 
 LOGGING = {}
-log_steps = []
-log_average_waiting_time = []
 
 initialize_waiting_queues(charging_stations)
 
@@ -116,14 +114,10 @@ while step < simulation_step:
             # if key == "enefit_volt_78141":
             queue = waiting_queues[key]['queue']
             print(f"station: {key}")
-            sum_waiting_step = 0
             for item in queue:
-                sum_waiting_step += item.waiting_step_counter
                 print(item.id, item.waiting_step_counter, item.charging_step_counter)
-            log_steps.append(step)
-            log_average_waiting_time.append(sum_waiting_step/len(charging_stations))
         
-           
+        
     traci.simulationStep()
     running_vehicles = traci.vehicle.getIDList()
 
@@ -149,7 +143,7 @@ while step < simulation_step:
 
             if distance < 100: # Getting to the charging station. -> [Waiting]
                 #if charging_station_id not in waiting_queues.keys():
-                 #   waiting_queues[charging_station_id] = [] #initializing queue for the charging station
+                #   waiting_queues[charging_station_id] = [] #initializing queue for the charging station
 
                 if ev_charging_station[ev_id]["state"] == "Going":
                     #waiting_queues[charging_station_id].append(waiting_queue_item(charging_station_id, ev_id, 0, 0))
@@ -159,7 +153,6 @@ while step < simulation_step:
 
                 queue = waiting_queues[charging_station_id]['queue']
                 if len(queue) > 0 and queue[0].charging_step_counter >= CHARGING_DURATION_STEPS:
-                    LOGGING["vehicle_id"] = ev_id
                     LOGGING[ev_id] = queue[0].waiting_step_counter
                     charging_stations[charging_station_id]["num_going"] -= 1
                     v = queue.pop(0)
@@ -168,7 +161,6 @@ while step < simulation_step:
                     print('charging_station: ', v.charging_station_id, 'popped', v.id, 'waited: ', v.waiting_step_counter, 'charge_time: ', v.charging_step_counter, len(queue))
 
                 if len(queue) > 1 and queue[1].charging_step_counter >= CHARGING_DURATION_STEPS:
-                    LOGGING["vehicle_id"] = ev_id
                     LOGGING[ev_id] = queue[1].waiting_step_counter
                     charging_stations[charging_station_id]["num_going"] -= 1
                     v = queue.pop(1)
@@ -194,21 +186,17 @@ while step < simulation_step:
 
 traci.close()
 
-plt.plot(log_steps, log_average_waiting_time, "--o")
-plt.show()
-
-csv_file_path = 'waiting_time_summary.csv'
+csv_file_path = f'log_{EV_trip_xml}.csv'
 
 # Writing the dictionary to a CSV file
 with open(csv_file_path, 'w', newline='') as csv_file:
-    writer = csv.DictWriter(csv_file, fieldnames=LOGGING.keys())
-    
-    # Write the header
-    writer.writeheader()
+    writer = csv.writer(csv_file)
+    writer.writerow(['vehicle_id', 'waiting_time'])
     
     # Write the data
-    for i in range(len(LOGGING['vehicle_id'])):
-        row_data = {key: LOGGING[key] for key in LOGGING.keys()}
-        writer.writerow(row_data)
+    for key, value in LOGGING.items():
+        writer.writerow([key, value])
+
 
 print(f"CSV file written to {csv_file_path}")
+
