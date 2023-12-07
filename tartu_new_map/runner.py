@@ -85,7 +85,7 @@ def find_nearest_empty_charging_station(ev_id, charging_stations):
 
 def run(EV_trip_xml, sumo_file):
     # EV_trip_xml = "car.ev.trips.05.xml"
-    charging_station_xml_gz = "charging.stations.xml.gz"
+    charging_station_xml_gz = 'charging.stations.xml.gz'
 
     soulEV65_ids = getIds_EV(EV_trip_xml)
     charging_stations = get_chargingstations(charging_station_xml_gz)
@@ -130,7 +130,7 @@ def run(EV_trip_xml, sumo_file):
                     queue[idx].charging_step_counter = queue[idx].charging_step_counter + 1
                 else:
                     queue[idx].waiting_step_counter = queue[idx].waiting_step_counter + 1
-                    waiting_queues[charging_station_id]['waiting_steps'] += 1
+                    waiting_queues[key]['waiting_steps'] += 1
 
         for ev_id in soulEV65_ids:
             if ev_id not in running_vehicles:
