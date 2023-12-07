@@ -16,7 +16,8 @@ for EV_trip_xml, sumo_file, simulation_id, ev_percentage in zip(EV_trip_xml_list
     # Writing the dictionary to a CSV file
     total_waiting_time = 0
     for key, value in waiting_queues.items():
-        total_waiting_time += value['waiting_steps']
+        if(value['total_cars'] != 0):
+            total_waiting_time += value['waiting_steps']/value['total_cars']
 
     avg_waiting_time = total_waiting_time / len(waiting_queues.keys())
     rows.append([simulation_id, ev_percentage, avg_waiting_time])
