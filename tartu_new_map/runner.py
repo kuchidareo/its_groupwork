@@ -83,9 +83,9 @@ def find_nearest_empty_charging_station(ev_id, charging_stations):
     return dest_station_id, dest_station_edge_id
 
 
-def run(EV_trip_xml, sumo_file):
+def run(EV_trip_xml, sumo_file, charging_station_xml = 'charging.stations.xml.gz'):
     # EV_trip_xml = "car.ev.trips.05.xml"
-    charging_station_xml_gz = 'charging.stations.xml.gz'
+    charging_station_xml_gz = charging_station_xml
 
     soulEV65_ids = getIds_EV(EV_trip_xml)
     charging_stations = get_chargingstations(charging_station_xml_gz)
