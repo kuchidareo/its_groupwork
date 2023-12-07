@@ -8,6 +8,7 @@ import gzip
 from sumolib import checkBinary
 import xml.etree.ElementTree as ET
 import matplotlib.pyplot as plt
+import sys
 
 sumoBinary = checkBinary("sumo")
 # sumoBinary = checkBinary('sumo-gui') # to watch the simulation on sumo-gui
@@ -45,10 +46,11 @@ def get_chargingstations(xml_gz):
     return charging_stations
 
 def initialize_waiting_queues(charging_stations):
+    waiting_queues = {}
     for charging_station in charging_stations:
         waiting_queues[charging_station] = {'queue': [], 'waiting_steps': 0, 'total_cars': 0}
 
-    return charging_stations
+    return waiting_queues
 
 def find_nearest_empty_charging_station(ev_id, charging_stations):
     vehicle_edge_id = traci.vehicle.getRoadID(ev_id)
@@ -81,15 +83,7 @@ def find_nearest_empty_charging_station(ev_id, charging_stations):
     return dest_station_id, dest_station_edge_id
 
 
-simulation_result_path = f'log_waiting_vs_cars_simulation.csv'
-fields = ["SimulationId", "EVPercentage", "AvergaWaitime"]
-rows = []
-
-ev_percentages = ["05", "10", "15", "20", "25", "30", "35", "40", "45", "50"]
-
-EV_trip_xml_list = [f"car.ev.trips.{i}.xml" for i in ev_percentages]
-sumo_file_list = [f"osm.{i}.sumocfg" for i in ev_percentages]
-for EV_trip_xml, sumo_file, simulation_id, ev_percentage in zip(EV_trip_xml_list, sumo_file_list, range(10), ev_percentages):
+def run(EV_trip_xml, sumo_file):
     # EV_trip_xml = "car.ev.trips.05.xml"
     charging_station_xml_gz = "charging.stations.xml.gz"
 
@@ -104,7 +98,7 @@ for EV_trip_xml, sumo_file, simulation_id, ev_percentage in zip(EV_trip_xml_list
 
     LOGGING = {}
 
-    initialize_waiting_queues(charging_stations)
+    waiting_queues = initialize_waiting_queues(charging_stations)
 
     sumoCmd = [sumoBinary, "-c", sumo_file, "--no-warnings"]
     traci.start(sumoCmd)
@@ -193,22 +187,7 @@ for EV_trip_xml, sumo_file, simulation_id, ev_percentage in zip(EV_trip_xml_list
 
     traci.close()
 
-    csv_file_path = f'log_{EV_trip_xml}.csv'
-
-    # Writing the dictionary to a CSV file
-    total_waiting_time = 0
-    for key, value in waiting_queues.items():
-        total_waiting_time += value['waiting_steps']
+    return waiting_queues
     
-    avg_waiting_time = total_waiting_time / len(waiting_queues.keys())
-    rows.append([simulation_id, ev_percentage, avg_waiting_time])
-
-with open(simulation_result_path, 'w', newline='') as csv_file:
-    writer = csv.writer(csv_file)
-    writer.writerow(fields)
-
-    writer.writerow(rows)
-
-
-print(f"CSV file written to {csv_file_path}")
+#sys.modules[__name__] = run 
 
