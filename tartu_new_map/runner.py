@@ -48,7 +48,7 @@ def get_chargingstations(xml_gz):
 def initialize_waiting_queues(charging_stations):
     waiting_queues = {}
     for charging_station in charging_stations:
-        waiting_queues[charging_station] = {'queue': [], 'waiting_steps': 0, 'total_cars': 0}
+        waiting_queues[charging_station] = {'queue': [], 'waiting_steps': 0, 'total_cars': 0, 'charged_cars': 0}
 
     return waiting_queues
 
@@ -91,7 +91,7 @@ def run(EV_trip_xml, sumo_file):
     charging_stations = get_chargingstations(charging_station_xml_gz)
     CHARGING_DURATION_STEPS = 330
 
-    simulation_step = 100 # the last car departs at step 3500.
+    simulation_step = 10000 # the last car departs at step 3500.
 
     waiting_queues = {}
     ev_charging_station = {}
@@ -105,19 +105,21 @@ def run(EV_trip_xml, sumo_file):
 
     step = 0
     # while step < simulation_step:
-    while step < simulation_step:
+    while traci.simulation.getMinExpectedNumber() > 0 and step < simulation_step:
         if step % 100 == 0:
             print("-----------")
             print(f"STEP: {step}")
             # for station_id in charging_stations.keys():
             #     station = charging_stations[station_id]
             #     print(station_id, station["num_going"])
-            for key in waiting_queues.keys(): 
+            for key, value in waiting_queues.items(): 
                 # if key == "enefit_volt_78141":
-                queue = waiting_queues[key]['queue']
-                print(f"station: {key}")
-                for item in queue:
-                    print(item.id, item.waiting_step_counter, item.charging_step_counter)
+                # queue = waiting_queues[key]['queue']
+                print(key)
+                print("waiting_steps: ", value["waiting_steps"], "total_cars: ", value["total_cars"], "charged_cars: ", value["charged_cars"])
+                # print(f"station: {key}")
+                # for item in queue:
+                #     print(item.id, item.waiting_step_counter, item.charging_step_counter)
             
             
         traci.simulationStep()
@@ -134,6 +136,16 @@ def run(EV_trip_xml, sumo_file):
 
         for ev_id in soulEV65_ids:
             if ev_id not in running_vehicles:
+                if ev_id in ev_charging_station:
+                    charging_station_id = ev_charging_station[ev_id]["charging_station_id"]
+                    queue = waiting_queues[charging_station_id]['queue']
+                    for i in range(len(queue)):
+                        if queue[i].id == ev_id:
+                            charging_stations[charging_station_id]["num_going"] -= 1
+                            waiting_queues[charging_station_id]['charged_cars'] +=1
+                            queue.pop(i)
+                            ev_charging_station[ev_id]["state"] = "Charged"
+                            break
                 continue
             
             elif (ev_id in ev_charging_station.keys()): # Going to the charging station. -> [Going]
@@ -156,6 +168,7 @@ def run(EV_trip_xml, sumo_file):
                     if len(queue) > 0 and queue[0].charging_step_counter >= CHARGING_DURATION_STEPS:
                         LOGGING[ev_id] = queue[0].waiting_step_counter
                         charging_stations[charging_station_id]["num_going"] -= 1
+                        waiting_queues[charging_station_id]['charged_cars'] +=1
                         v = queue.pop(0)
                         ev_charging_station[ev_id]["state"] = "Charged"
                         # ev_charging_station.pop(ev_id)
@@ -164,6 +177,7 @@ def run(EV_trip_xml, sumo_file):
                     if len(queue) > 1 and queue[1].charging_step_counter >= CHARGING_DURATION_STEPS:
                         LOGGING[ev_id] = queue[1].waiting_step_counter
                         charging_stations[charging_station_id]["num_going"] -= 1
+                        waiting_queues[charging_station_id]['charged_cars'] +=1
                         v = queue.pop(1)
                         ev_charging_station[ev_id]["state"] = "Charged"
                         # ev_charging_station.pop(ev_id)
